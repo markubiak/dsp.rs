@@ -9,7 +9,7 @@ use crate::vector;
 /// A window function. Can be applied to a signal
 #[derive(Clone, Debug, PartialEq)]
 pub struct Window {
-    samples: Vec<f32>,
+    pub samples: Vec<f32>,
 }
 
 impl Window {
