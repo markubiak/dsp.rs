@@ -2,22 +2,19 @@
 use arraydeque::{ArrayDeque, Wrapping};
 use generic_array::{ArrayLength, GenericArray};
 use itertools::izip;
-use crate::RealBuffer;
 
+use super::Filter;
 
 /// A Finite Impulse Response (FIR) filter
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct FIRFilter<N: ArrayLength<f32>> {
     x: ArrayDeque<GenericArray<f32, N>, Wrapping>,
-    b: GenericArray<f32, N>
+    b: GenericArray<f32, N>,
 }
 
-
 impl<N: ArrayLength<f32>> FIRFilter<N> {
-
     /// Returns a new FIRFilter from coefficients b
     pub fn new(b: &[f32]) -> FIRFilter<N> {
-
         // Initialize sample history
         let mut x: ArrayDeque<GenericArray<f32, N>, Wrapping> = ArrayDeque::new();
         assert_eq!(b.len(), x.capacity());
@@ -31,11 +28,12 @@ impl<N: ArrayLength<f32>> FIRFilter<N> {
         // Return our new FIR filter
         FIRFilter { x, b }
     }
+}
 
+impl<N: ArrayLength<f32>> Filter for FIRFilter<N> {
     /// Process one sample of the input signal and returns one sample of the
     /// output signal.
     fn process_one(&mut self, in_samp: f32) -> f32 {
-
         // Shift in old values
         self.x.pop_back();
         self.x.push_front(in_samp.clone());
@@ -49,15 +47,7 @@ impl<N: ArrayLength<f32>> FIRFilter<N> {
         // Return our calculated result
         sum
     }
-
-    /// Processes in_slice as a slice of samples as inputs to the filter,
-    /// writing results to out_slice.
-    pub fn process(&mut self, input: &RealBuffer, output: &mut RealBuffer) {
-        let size = std::cmp::min(input.len(), output.len());
-        (0..size).for_each(|i| output[i] = self.process_one(input[i]));
-    }
 }
-
 
 /// ------------------------------------------------------------------------------------------------
 /// Module unit tests
@@ -66,7 +56,7 @@ impl<N: ArrayLength<f32>> FIRFilter<N> {
 mod tests {
     use super::*;
     use crate::window;
-    use generic_array::typenum::{U5};
+    use generic_array::typenum::U5;
 
     #[test]
     fn test_fir_convolution() {
