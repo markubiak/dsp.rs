@@ -1,4 +1,4 @@
-/// Basic implementation of convolution operation via FIR filter
+//! Basic implementation of a Finite Impulse Reponse (FIR) filter
 use arraydeque::{ArrayDeque, Wrapping};
 use generic_array::{ArrayLength, GenericArray};
 use itertools::izip;

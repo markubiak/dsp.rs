@@ -1,3 +1,4 @@
+//! Implementations of common discrete-time filtering operations
 use itertools::izip;
 
 use crate::RealBuffer;

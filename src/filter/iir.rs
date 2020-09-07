@@ -1,4 +1,5 @@
-/// Basic implementations of common discrete filters
+//! Basic implementation of an Infinite Impulse Response (IIR) filter
+
 use arraydeque::{ArrayDeque, Wrapping};
 use generic_array::typenum::U3;
 use generic_array::{ArrayLength, GenericArray};
@@ -7,6 +8,68 @@ use itertools::izip;
 use super::Filter;
 
 /// A generic IIR filter with matching a/b tap lengths
+/// Implements an IIR filter using Direct Form Type I (DF-I).
+/// Specifically, this IIR implementation implements the equation:
+/// ```text
+/// y[n] = (1/a[0]) * (b[0]*x[0] + b[1]*x[1] + ... + b[N]*x[N] +
+///                    -a[1]*y[1] + ... + -a[N]*y[N])
+/// ```
+/// for an Nth order recursive filter.
+///
+/// This intentionally follows the same format/equation as
+/// [scipy.signal.lfilter](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lfilter.html),
+/// as this implementation is intended for deployable implementations
+/// of recursive filters designed and tested using functions from
+/// [scipy.signal](https://docs.scipy.org/doc/scipy/reference/signal.html).
+///
+/// The given implementation is generic across the size of the history
+/// buffer. This is always exactly one greater than the order. For example,
+/// a 3rd order recursive filter (N=3) can be implemented using an
+/// `IIRFilter<U4>`. This will be changed such that the generic parameter
+/// matches the order of the filter once
+/// [const generics](https://github.com/rust-lang/rust/issues/44580)
+/// are stabilized.
+///
+/// Example, comparing an analog simulation of a RC filter against an equivalent
+/// digital IIR filter computed using the
+/// [Bilinear Transform](https://en.wikipedia.org/wiki/Bilinear_transform#Example):
+/// ```
+/// # use dsp::filter::Filter;
+/// # use dsp::filter::iir::IIRFilter;
+/// # use itertools::izip;
+/// # use assert_approx_eq::assert_approx_eq;
+/// # use generic_array::typenum::U3;
+/// # use std::f32::consts::PI;
+/// // Test our biquad by using the bilinear transform to create
+/// // a digital filter with similar response to a basic analog RC
+/// // filter with constants T=0.1s RC=1.
+/// // Generate and compare their step responses over 5 seconds.
+/// let rc = 1.0;
+/// let t_samp = 0.1;
+/// 
+/// // Analog step response evaluated every T seconds.
+/// let mut analog_response = Vec::new();
+/// for i in 0..50 {
+///     let t = (i as f32) * t_samp;
+///     analog_response.push(1.0 - f32::exp(-t / rc));
+/// }
+/// 
+/// // Compute and run the equivalent digital filter by computing
+/// // the bilinear transform.
+/// let b = [1.0, 1.0, 0.0];
+/// let a = [1.0 + (2.0 * rc / t_samp), 1.0 - (2.0 * rc / t_samp), 0.0];
+/// let mut biquad_rc: IIRFilter<U3> = IIRFilter::new(&b, &a);
+/// let dig_unit_step = vec![1.0; 50];
+/// let mut digital_response = vec![0.0; 50];
+/// biquad_rc.process(&dig_unit_step, &mut digital_response);
+/// 
+/// // Compare the filter unit step responses. Since there
+/// // is some difference between the initial state of the
+/// // filters, use a less aggressive 5% threshold.
+/// for (analog_samp, digital_samp) in izip!(analog_response, digital_response) {
+///     assert_approx_eq!(analog_samp, digital_samp, 0.05);
+/// }
+/// ```
 #[derive(Clone, Debug)]
 pub struct IIRFilter<N: ArrayLength<f32>> {
     x: ArrayDeque<GenericArray<f32, N>, Wrapping>,
@@ -91,43 +154,8 @@ impl<N: ArrayLength<f32>> Filter for IIRFilter<N> {
 mod tests {
     use super::*;
     use crate::fft::ForwardFFT;
-    use assert_approx_eq::assert_approx_eq;
     use generic_array::typenum::U9;
     use std::f32::consts::PI;
-
-    #[test]
-    fn test_biquad_bilinear_rc() {
-        // Test our biquad by using the bilinear transform to create
-        // a digital filter with similar response to a basic analog RC
-        // filter with constants T=0.1s RC=1.
-        // Generate and compare their step responses over 5 seconds.
-        let rc = 1.0;
-        let t_samp = 0.1;
-
-        // Analog step response evaluated every T seconds.
-        let mut analog_response = Vec::new();
-        for i in 0..50 {
-            let t = (i as f32) * t_samp;
-            analog_response.push(1.0 - f32::exp(-t / rc));
-        }
-
-        // Compute and run the equivalent digital filter.
-        // Bilinear transform of RC filter:
-        // https://en.wikipedia.org/wiki/Bilinear_transform#Example
-        let b = [1.0, 1.0, 0.0];
-        let a = [1.0 + (2.0 * rc / t_samp), 1.0 - (2.0 * rc / t_samp), 0.0];
-        let mut biquad_rc: BiquadFilter = IIRFilter::new(&b, &a);
-        let dig_unit_step = vec![1.0; 50];
-        let mut digital_response = vec![0.0; 50];
-        biquad_rc.process(&dig_unit_step, &mut digital_response);
-
-        // Compare the filter unit step responses. Since there
-        // is some difference between the initial state of the
-        // filters, use a less aggressive 5% threshold
-        for (analog_samp, digital_samp) in izip!(analog_response, digital_response) {
-            assert_approx_eq!(analog_samp, digital_samp, 0.05);
-        }
-    }
 
     #[test]
     fn test_iir_lowpass_real() {
